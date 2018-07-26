@@ -44,7 +44,7 @@ float accelX, accelY, accelZ;
 float gForceX, gForceY, gForceZ, gForceXY_magnitude, gForceX1, gForceY1, gForceZ1;
 
 float gyroX, gyroY, gyroZ;
-float rotX, rotY, rotZ;
+float rotX, rotY, rotZ, rotX1, rotY1, rotZ1;
 float rotX_cal,rotY_cal,rotZ_cal;
 
 void setup() {
@@ -63,7 +63,7 @@ void setup() {
   display.println("Hold Sensor Still");
   display.display();
   setupMPU();
-  //calibrateGyro();
+  calibrateGyro();
   intitialG();
   calibrateAcc_XY();
   calibrateAcc_Z();
@@ -132,10 +132,6 @@ void processGyroData() {
 
 void printData() {
 
-  //offset gyro with initial reading
-  rotX -= rotX_cal;
-  rotY -= rotY_cal;
-  rotZ -= rotZ_cal;
 
  // gForceX = (cos(Rz)*cos(Ry)*gForceX)+(((cos(Rz)*sin(Rx)*sin(Ry))-(cos(Rx)*sin(Rz)))*gForceY)+(((sin(Rx)*sin(Rz))+(cos(Rx)*cos(Rz)*sin(Ry)))*gForceZ);
  // gForceY = (cos(Ry)*sin(Rz)*gForceX)+(((cos(Rx)*cos(Rz))+(sin(Rx)*sin(Rz)*sin(Ry)))*gForceY)+(((cos(Rx)*sin(Rz)*sin(Ry))-(cos(Rz)*sin(Rx)))*gForceZ);
@@ -159,6 +155,16 @@ void printData() {
   
   //gForceX = cos(Rz)*(sqrt(pow(gForceX,2)+pow(gForceY,2)));
   //gForceY = sin(Rz)*(sqrt(pow(gForceX,2)+pow(gForceY,2)));
+
+  
+  //offset gyro with initial reading
+  rotX -= rotX_cal;
+  rotY -= rotY_cal;
+  rotZ -= rotZ_cal;
+
+  rotX1 = rotX+(rotY*sin(Rx)*tan(Ry))+(rotZ*cos(Rx)*tan(Ry));
+  rotY1 = (rotY*cos(Rx))-(rotZ*sin(Rx));
+  rotZ1 = (rotY*sin(Rx)/cos(Ry))+(rotZ*cos(Rx)/cos(Ry));
 
  /* 
   Serial.print("Gyro (deg)");
@@ -192,11 +198,11 @@ void printData() {
   
   display.setCursor(0,25);
   display.print("G ");
-  display.print(rotX);
+  display.print(rotX1);
   display.print("  ");
-  display.print(rotY);
+  display.print(rotY1);
   display.print("  ");
-  display.println(rotZ);
+  display.println(rotZ1);
   display.display();
 }
 
