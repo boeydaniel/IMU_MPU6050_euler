@@ -23,29 +23,31 @@ the software.
 
 #include <Wire.h>
 #include <math.h>
-
+//#include "MegunoLink.h"
+//#include "Filter.h"
 #include <SPI.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #define OLED_RESET 4
 Adafruit_SSD1306 display(OLED_RESET);
 
-
-
-
 #if (SSD1306_LCDHEIGHT != 32)
 #error("Height incorrect, please fix Adafruit_SSD1306.h!");
 #endif
+
+//ExponentialFilter<long> GyroXFilter(70, 0);
 
 float Rx, Ry, Rz;
 float Gx, Gy, Gz, GyGz_magnitude;
 
 float accelX, accelY, accelZ;
 float gForceX, gForceY, gForceZ, gForceXY_magnitude, gForceX1, gForceY1, gForceZ1;
+float gForceX_cal, gForceY_cal;
 
 float gyroX, gyroY, gyroZ;
 float rotX, rotY, rotZ, rotX1, rotY1, rotZ1;
 float rotX_cal,rotY_cal,rotZ_cal;
+float rotX_smooth, rotY_smooth, rotZ_smooth, rotX1_prev =0, rotY1_prev=0, rotZ1_prev=0;
 
 void setup() {
   
@@ -75,6 +77,8 @@ void setup() {
 void loop() {
   recordAccelRegisters();
   recordGyroRegisters();
+  rotationMatrix();
+  exponentialSmoothing();
   printData();
   delay(100);
 }
@@ -130,9 +134,8 @@ void processGyroData() {
   rotZ = gyroZ / 131.0;
 }
 
-void printData() {
-
-
+void rotationMatrix()
+{
  // gForceX = (cos(Rz)*cos(Ry)*gForceX)+(((cos(Rz)*sin(Rx)*sin(Ry))-(cos(Rx)*sin(Rz)))*gForceY)+(((sin(Rx)*sin(Rz))+(cos(Rx)*cos(Rz)*sin(Ry)))*gForceZ);
  // gForceY = (cos(Ry)*sin(Rz)*gForceX)+(((cos(Rx)*cos(Rz))+(sin(Rx)*sin(Rz)*sin(Ry)))*gForceY)+(((cos(Rx)*sin(Rz)*sin(Ry))-(cos(Rz)*sin(Rx)))*gForceZ);
  // gForceZ = (-sin(Ry)*gForceX)+(cos(Ry)*sin(Rx)*gForceY)+(cos(Rx)*cos(Ry)*gForceZ);
@@ -141,17 +144,17 @@ void printData() {
   //gForceY = (((cos(Rz)*sin(Rx)*sin(Ry))-(cos(Rx)*sin(Rz)))*gForceX)+(((cos(Rx)*cos(Rz))+(sin(Rx)*sin(Rz)*sin(Ry)))*gForceY)+(cos(Ry)*sin(Rx)*gForceZ);
   //gForceZ = (((sin(Rx)*sin(Rz))+(cos(Rx)*cos(Rz)*sin(Ry)))*gForceX)+(((cos(Rx)*sin(Rz)*sin(Ry))-(cos(Rz)*sin(Rx)))*gForceY)+(cos(Rx)*cos(Ry)*gForceZ);
  
-  //gForceX = (cos(Rz)*cos(Ry)*gForceX)+(-cos(Ry)*sin(Rz)*gForceY)+(-sin(Ry)*gForceZ);
-  //gForceY = (((-cos(Rz)*sin(Rx)*sin(Ry))+(cos(Rx)*sin(Rz)))*gForceX)+(((cos(Rx)*cos(Rz))+(sin(Rx)*sin(Rz)*sin(Ry)))*gForceY)+(-cos(Ry)*sin(Rx)*gForceZ);
-  //gForceZ = (((sin(Rx)*sin(Rz))+(cos(Rx)*cos(Rz)*sin(Ry)))*gForceX)+(((-cos(Rx)*sin(Rz)*sin(Ry))+(cos(Rz)*sin(Rx)))*gForceY)+(cos(Rx)*cos(Ry)*gForceZ);
+  gForceX1 = (cos(Rz)*cos(Ry)*gForceX)+(-cos(Ry)*sin(Rz)*gForceY)+(-sin(Ry)*gForceZ);
+  gForceY1 = (((-cos(Rz)*sin(Rx)*sin(Ry))+(cos(Rx)*sin(Rz)))*gForceX)+(((cos(Rx)*cos(Rz))+(sin(Rx)*sin(Rz)*sin(Ry)))*gForceY)+(-cos(Ry)*sin(Rx)*gForceZ);
+  gForceZ1 = (((sin(Rx)*sin(Rz))+(cos(Rx)*cos(Rz)*sin(Ry)))*gForceX)+(((-cos(Rx)*sin(Rz)*sin(Ry))+(cos(Rz)*sin(Rx)))*gForceY)+(cos(Rx)*cos(Ry)*gForceZ);
 
-  gForceX1 = (cos(Ry)*gForceX)+(-sin(Ry)*gForceZ);
-  gForceY1 = (-sin(Rx)*sin(Ry)*gForceX)+(cos(Rx)*gForceY)+(-cos(Ry)*sin(Rx)*gForceZ);
-  gForceZ1 = (cos(Rx)*sin(Ry)*gForceX)+(sin(Rx)*gForceY)+(cos(Rx)*cos(Ry)*gForceZ);
+  //gForceX1 = (cos(Ry)*gForceX)+(-sin(Ry)*gForceZ);
+  //gForceY1 = (-sin(Rx)*sin(Ry)*gForceX)+(cos(Rx)*gForceY)+(-cos(Ry)*sin(Rx)*gForceZ);
+  //gForceZ1 = (cos(Rx)*sin(Ry)*gForceX)+(sin(Rx)*gForceY)+(cos(Rx)*cos(Ry)*gForceZ);
   
-  gForceX = (cos(Rz)*gForceX1)-(sin(Rz)*gForceY1);
-  gForceY = (sin(Rz)*gForceX1)+(cos(Rz)*gForceY1);
-  gForceZ = gForceZ1;
+  //gForceX = (cos(Rz)*gForceX1)-(sin(Rz)*gForceY1);
+  //gForceY = (sin(Rz)*gForceX1)+(cos(Rz)*gForceY1);
+  //gForceZ = gForceZ1;
   
   //gForceX = cos(Rz)*(sqrt(pow(gForceX,2)+pow(gForceY,2)));
   //gForceY = sin(Rz)*(sqrt(pow(gForceX,2)+pow(gForceY,2)));
@@ -161,19 +164,42 @@ void printData() {
   rotX -= rotX_cal;
   rotY -= rotY_cal;
   rotZ -= rotZ_cal;
-
+ 
   rotX1 = rotX+(rotY*sin(Rx)*tan(Ry))+(rotZ*cos(Rx)*tan(Ry));
   rotY1 = (rotY*cos(Rx))-(rotZ*sin(Rx));
   rotZ1 = (rotY*sin(Rx)/cos(Ry))+(rotZ*cos(Rx)/cos(Ry));
+}
 
- /* 
+void exponentialSmoothing()
+{
+  
+// GyroXFilter.Filter(rotX1);
+
+//  TimePlot Plot;
+//  Plot.SendData("Raw", rotX1);
+//  Plot.SendData("Filtered", GyroXFilter.Current());
+
+  float w = 0.5;
+  
+  rotX_smooth = w*rotX1+((1-w)*rotX1_prev);
+  rotY_smooth = w*rotY1+((1-w)*rotY1_prev);
+  rotZ_smooth = w*rotZ1+((1-w)*rotZ1_prev);
+
+  rotX1_prev = rotX_smooth;
+  rotY1_prev = rotY_smooth;
+  rotZ1_prev = rotZ_smooth;
+}
+
+void printData() {
+
+/*  
   Serial.print("Gyro (deg)");
   Serial.print(" X=");
-  Serial.print(rotX);
+  Serial.print(rotX1);
   Serial.print(" Y=");
-  Serial.print(rotY);
+  Serial.print(rotY1);
   Serial.print(" Z=");
-  Serial.print(rotZ);
+  Serial.print(rotZ1);
   Serial.print(" Accel (g)");
   Serial.print(" X=");
   Serial.print(gForceX);
@@ -190,20 +216,21 @@ void printData() {
   display.print("x     y     z");
   display.setCursor(0,10);
   display.print("A ");
-  display.print(gForceX);
+  display.print(gForceX1);
   display.print("  ");
-  display.print(gForceY);
+  display.print(gForceY1);
   display.print("  ");
-  display.println(gForceZ);
+  display.println(gForceZ1);
   
   display.setCursor(0,25);
   display.print("G ");
-  display.print(rotX1);
+  display.print(rotX_smooth);
   display.print("  ");
-  display.print(rotY1);
+  display.print(rotY_smooth);
   display.print("  ");
-  display.println(rotZ1);
+  display.println(rotZ_smooth);
   display.display();
+
 }
 
 //get initial static gyro reading
@@ -267,8 +294,7 @@ void calibrateAcc_XY()
 //get yaw correction angle
 void calibrateAcc_Z()
 {
-  float gForceX_cal;
-  float gForceY_cal;
+
   
   for(int count = 3; count>0; count--)
   {
@@ -312,9 +338,9 @@ void calibrateAcc_Z()
   display.print(gForceX_cal);
   display.print("  ");
   display.print(gForceY_cal);
-  display.setCursor(30,25);
+  display.setCursor(20,25);
   display.print(Rz*180/3.142);
   display.display();
-  delay(5000);
+  delay(2000);
 }
 
