@@ -1,6 +1,8 @@
 # IMU_MPU6050_euler
 Calibrating MPU6050 sensor to transform inertial coordinate to world coordinate using rotation matrix method.
 
+Exponential filter applied to transformed gyro reading to reduce noise.
+
 Transformed acceleration and angular rate (deg/s) are displayed on an OLED display.
 
 I used VRomanov89's program to obtain the raw sensor data.
