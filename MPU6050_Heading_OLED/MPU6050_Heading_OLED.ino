@@ -48,6 +48,11 @@ float gyroX, gyroY, gyroZ;
 float rotX, rotY, rotZ, rotX1, rotY1, rotZ1;
 float rotX_cal,rotY_cal,rotZ_cal;
 float rotX_smooth, rotY_smooth, rotZ_smooth, rotX1_prev =0, rotY1_prev=0, rotZ1_prev=0;
+float rotX1_prev2, rotY1_prev2, rotZ1_prev2;
+float rotX_smooth1, rotY_smooth1, rotZ_smooth1;
+
+uint32_t loop_timer;
+float angle_pitch, angle_roll, angle_yaw;
 
 void setup() {
   
@@ -70,7 +75,13 @@ void setup() {
   calibrateAcc_XY();
   calibrateAcc_Z();
 
-  display.clearDisplay();
+  
+  display.setTextColor(WHITE);
+  display.setCursor(15,0);
+  display.println("Calibration Done");
+  display.display();
+  delay(5000);
+  loop_timer = micros();
 }
 
 
@@ -79,8 +90,14 @@ void loop() {
   recordGyroRegisters();
   rotationMatrix();
   exponentialSmoothing();
-  printData();
-  delay(100);
+  
+  angle_pitch += (float)rotX_smooth1 * (micros()-loop_timer)*0.000001;                                    
+  angle_roll += (float)rotY_smooth1 * (micros()-loop_timer)*0.000001;
+  angle_yaw += (float)rotZ_smooth1 * (micros()-loop_timer)*0.000001; 
+  
+  loop_timer = micros();
+  
+  printData();  
 }
 
 void setupMPU(){
@@ -164,12 +181,26 @@ void rotationMatrix()
   rotX -= rotX_cal;
   rotY -= rotY_cal;
   rotZ -= rotZ_cal;
+  
+  float w;
+
+  if(rotX_smooth <=0.2 && rotY_smooth <=0.2 && rotZ_smooth <=0.2) w=0.1;
+  else w = 0.6;
+  
+  rotX_smooth = w*rotX+((1-w)*rotX1_prev);
+  rotY_smooth = w*rotY+((1-w)*rotY1_prev);
+  rotZ_smooth = w*rotZ+((1-w)*rotZ1_prev);
+
+  rotX1_prev = rotX_smooth;
+  rotY1_prev = rotY_smooth;
+  rotZ1_prev = rotZ_smooth;
  
-  rotX1 = rotX+(rotY*sin(Rx)*tan(Ry))+(rotZ*cos(Rx)*tan(Ry));
-  rotY1 = (rotY*cos(Rx))-(rotZ*sin(Rx));
-  rotZ1 = (rotY*sin(Rx)/cos(Ry))+(rotZ*cos(Rx)/cos(Ry));
+  rotX1 = rotX_smooth+(rotY_smooth*sin(Rx)*tan(Ry))+(rotZ_smooth*cos(Rx)*tan(Ry));
+  rotY1 = (rotY_smooth*cos(Rx))-(rotZ_smooth*sin(Rx));
+  rotZ1 = (rotY_smooth*sin(Rx)/cos(Ry))+(rotZ_smooth*cos(Rx)/cos(Ry));
 }
 
+//smooth out reading again after rotation transformation of gyro
 void exponentialSmoothing()
 {
   
@@ -179,15 +210,18 @@ void exponentialSmoothing()
 //  Plot.SendData("Raw", rotX1);
 //  Plot.SendData("Filtered", GyroXFilter.Current());
 
-  float w = 0.5;
+  float w;
   
-  rotX_smooth = w*rotX1+((1-w)*rotX1_prev);
-  rotY_smooth = w*rotY1+((1-w)*rotY1_prev);
-  rotZ_smooth = w*rotZ1+((1-w)*rotZ1_prev);
+  if(rotX_smooth1 <=0.2 && rotY_smooth1 <=0.2 && rotZ_smooth1 <=0.2) w=0.1;
+  else w = 0.6;
+  
+  rotX_smooth1 = w*rotX1+((1-w)*rotX1_prev2);
+  rotY_smooth1 = w*rotY1+((1-w)*rotY1_prev2);
+  rotZ_smooth1 = w*rotZ1+((1-w)*rotZ1_prev2);
 
-  rotX1_prev = rotX_smooth;
-  rotY1_prev = rotY_smooth;
-  rotZ1_prev = rotZ_smooth;
+  rotX1_prev2 = rotX_smooth1;
+  rotY1_prev2 = rotY_smooth1;
+  rotZ1_prev2 = rotZ_smooth1;
 }
 
 void printData() {
@@ -224,11 +258,11 @@ void printData() {
   
   display.setCursor(0,25);
   display.print("G ");
-  display.print(rotX_smooth);
+  display.print(angle_pitch);
   display.print("  ");
-  display.print(rotY_smooth);
+  display.print(angle_roll);
   display.print("  ");
-  display.println(rotZ_smooth);
+  display.println(angle_yaw);
   display.display();
 
 }
@@ -253,7 +287,7 @@ void calibrateGyro()
 // get initial static accelerometer reading
 void intitialG()
 {
-  for(int count = 0; count <1000; count++)
+  for(int count = 0; count <2000; count++)
   {
     recordAccelRegisters();
     Gx += gForceX;
@@ -262,9 +296,9 @@ void intitialG()
     //delay(4);
   }
 
-  Gx /=1000;
-  Gy /=1000;
-  Gz /=1000;
+  Gx /=2000;
+  Gy /=2000;
+  Gz /=2000;
   recordAccelRegisters();
   /*
   Serial.println("Initial Acc");
@@ -316,7 +350,7 @@ void calibrateAcc_Z()
   display.print("Calibrating");
   display.display();
   
-  for(int count = 0; count <500; count++)
+  for(int count = 0; count <1000; count++)
   {
     recordAccelRegisters();
     gForceX1 = (cos(Ry)*gForceX)+(-sin(Ry)*gForceZ);
@@ -326,8 +360,8 @@ void calibrateAcc_Z()
     gForceY_cal += gForceY1;
   }
   
-  gForceX_cal /=500;
-  gForceY_cal /=500;
+  gForceX_cal /=1000;
+  gForceY_cal /=1000;
 
   gForceXY_magnitude = sqrt(pow(gForceX_cal,2)+pow(gForceY_cal,2));
   Rz = acos(gForceX_cal/gForceXY_magnitude);
@@ -341,6 +375,5 @@ void calibrateAcc_Z()
   display.setCursor(20,25);
   display.print(Rz*180/3.142);
   display.display();
-  delay(2000);
 }
 
