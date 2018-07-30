@@ -54,7 +54,13 @@ float rotX_smooth1, rotY_smooth1, rotZ_smooth1;
 uint32_t loop_timer;
 float angle_pitch, angle_roll, angle_yaw;
 
+int pushbutton_pin = 13;
+int pushbutton_state;
+int previous_state = HIGH;
+int state = 0;
+
 void setup() {
+  pinMode(pushbutton_pin, INPUT);
   
   Serial.begin(9600);
   Wire.begin();
@@ -113,6 +119,8 @@ void setupMPU(){
   Wire.write(0x1C); //Accessing the register 1C - Acccelerometer Configuration (Sec. 4.5) 
   Wire.write(0b00000000); //Setting the accel to +/- 2g
   Wire.endTransmission(); 
+
+  
 }
 
 void recordAccelRegisters() {
@@ -184,7 +192,7 @@ void rotationMatrix()
   
   float w;
 
-  if(rotX_smooth <=0.2 && rotY_smooth <=0.2 && rotZ_smooth <=0.2) w=0.1;
+  if(rotX_smooth <=0.2 && rotY_smooth <=0.2 && rotZ_smooth <=0.2) w = 0.2;
   else w = 0.6;
   
   rotX_smooth = w*rotX+((1-w)*rotX1_prev);
@@ -212,7 +220,7 @@ void exponentialSmoothing()
 
   float w;
   
-  if(rotX_smooth1 <=0.2 && rotY_smooth1 <=0.2 && rotZ_smooth1 <=0.2) w=0.1;
+  if(rotX_smooth1 <=0.2 && rotY_smooth1 <=0.2 && rotZ_smooth1 <=0.2) w=0.2;
   else w = 0.6;
   
   rotX_smooth1 = w*rotX1+((1-w)*rotX1_prev2);
@@ -222,6 +230,11 @@ void exponentialSmoothing()
   rotX1_prev2 = rotX_smooth1;
   rotY1_prev2 = rotY_smooth1;
   rotZ1_prev2 = rotZ_smooth1;
+
+  //if gyro rate is below 0.1, set as 0
+  if(abs(rotX_smooth1) <= 0.1) rotX_smooth1 = 0.000000;
+  if(abs(rotY_smooth1) <= 0.1) rotY_smooth1 = 0.000000;
+  if(abs(rotZ_smooth1) <= 0.1) rotZ_smooth1 = 0.000000;
 }
 
 void printData() {
@@ -255,16 +268,42 @@ void printData() {
   display.print(gForceY1);
   display.print("  ");
   display.println(gForceZ1);
-  
-  display.setCursor(0,25);
-  display.print("G ");
-  display.print(angle_pitch);
-  display.print("  ");
-  display.print(angle_roll);
-  display.print("  ");
-  display.println(angle_yaw);
-  display.display();
 
+
+  //use push button (pin 13) to switch between displaying angular rate and absolute angle
+  int pushbutton_state = digitalRead(pushbutton_pin);
+
+  if(pushbutton_state == LOW && previous_state == HIGH)
+  {
+   if(state == 1) state = 0;
+   else state = 1;
+  }
+  
+  previous_state = pushbutton_state;
+  
+  if(state == 1)
+  {
+    display.setCursor(0,25);
+    display.print("G ");
+    display.print(angle_pitch); 
+    display.print("  ");
+    display.print(angle_roll); 
+    display.print("  ");
+    display.println(angle_yaw);
+    display.display();
+  }
+
+  else
+  {
+    display.setCursor(0,25);
+    display.print("G ");
+    display.print(rotX_smooth1); 
+    display.print("  ");
+    display.print(rotY_smooth1); 
+    display.print("  ");
+    display.println(rotZ_smooth1);
+    display.display();
+  }
 }
 
 //get initial static gyro reading
