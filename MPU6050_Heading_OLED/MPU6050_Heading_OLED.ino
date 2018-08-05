@@ -281,7 +281,7 @@ void printData() {
   
   previous_state = pushbutton_state;
   
-  if(state == 1)
+  if(state == 0)
   {
     display.setCursor(0,25);
     display.print("G ");
